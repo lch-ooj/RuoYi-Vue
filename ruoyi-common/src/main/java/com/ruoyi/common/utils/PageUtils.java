@@ -17,11 +17,15 @@ public class PageUtils extends PageHelper
      */
     public static void startPage()
     {
+        //1. 创建一个PageDomain对象，用于接收前端分页的参数：
         PageDomain pageDomain = TableSupport.buildPageRequest();
+        //2. 从PageDomain对象中提取出当前页码、每页大小、排序条件：
         Integer pageNum = pageDomain.getPageNum();
         Integer pageSize = pageDomain.getPageSize();
+        //3. 对排序条件进行转义处理，防止SQL注入：
         String orderBy = SqlUtil.escapeOrderBySql(pageDomain.getOrderBy());
-        Boolean reasonable = pageDomain.getReasonable();
+        Boolean reasonable = pageDomain.getReasonable(); // 是否合理分页
+        //4. 使用PageHelper开启分页，设置页码、每页大小、排序条件和是否合理分页。
         PageHelper.startPage(pageNum, pageSize, orderBy).setReasonable(reasonable);
     }
 

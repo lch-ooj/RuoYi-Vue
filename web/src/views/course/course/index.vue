@@ -1,5 +1,7 @@
 <template>
   <div class="app-container">
+
+    <!-- 搜索表单 start -->
     <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="课程编码" prop="code">
         <el-input
@@ -32,7 +34,9 @@
         <el-button icon="Refresh" @click="resetQuery">重置</el-button>
       </el-form-item>
     </el-form>
+    <!-- 搜索表单 end -->
 
+    <!-- 按钮区域 start -->
     <el-row :gutter="10" class="mb8">
       <el-col :span="1.5">
         <el-button
@@ -74,7 +78,9 @@
       </el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
+    <!-- 按钮区域end -->
 
+    <!-- 数据展示表格 start -->
     <el-table v-loading="loading" :data="courseList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="课程id" align="center" prop="id" />
@@ -95,7 +101,9 @@
         </template>
       </el-table-column>
     </el-table>
+    <!-- 数据展示表格 end -->
     
+    <!-- 分页区域 start -->
     <pagination
       v-show="total>0"
       :total="total"
@@ -103,6 +111,7 @@
       v-model:limit="queryParams.pageSize"
       @pagination="getList"
     />
+    <!-- 分页区域 end -->
 
     <!-- 添加或修改课程管理对话框 -->
     <el-dialog :title="title" v-model="open" width="500px" append-to-body>
@@ -153,23 +162,39 @@
 </template>
 
 <script setup name="Course">
+
+// 引入后端api接口
 import { listCourse, getCourse, delCourse, addCourse, updateCourse } from "@/api/course/course"
 
+// 获取当前实例代理对象，用于访问组件数据、方法
 const { proxy } = getCurrentInstance()
+// 获取课程学科的数据字典
 const { course_subject } = useDict('course_subject')
 
+// 列表数据
 const courseList = ref([])
+// 是否显示弹框
 const open = ref(false)
+// 是否显示加载状态
 const loading = ref(true)
+// 是否显示搜索栏
 const showSearch = ref(true)
+// 复选框，被选中id的数组
 const ids = ref([])
+// 复选框，是否单选，用于高亮修改、删除按钮
 const single = ref(true)
+// 复选框，是否多选，仅高亮删除按钮
 const multiple = ref(true)
+// 总（记录）条数
 const total = ref(0)
+// 用于区分新增、修改对话框标题
 const title = ref("")
 
+// 定义reactive响应式对象
 const data = reactive({
+  // 新增或修改表单数据
   form: {},
+  // 搜索条件参数
   queryParams: {
     pageNum: 1,
     pageSize: 10,
@@ -178,6 +203,7 @@ const data = reactive({
     name: undefined,
     applicablePerson: undefined,
   },
+  // 表单校验规则
   rules: {
     subject: [
       { required: true, message: "课程学科不能为空", trigger: "change" }
@@ -194,6 +220,7 @@ const data = reactive({
   }
 })
 
+// 将data对象的三个属性，转换为ref响应式对象
 const { queryParams, form, rules } = toRefs(data)
 
 /** 查询课程管理列表 */
@@ -205,14 +232,14 @@ function getList() {
     loading.value = false
   })
 }
-
 /** 取消按钮 */
+
 function cancel() {
   open.value = false
   reset()
 }
-
 /** 表单重置 */
+
 function reset() {
   form.value = {
     id: null,
@@ -239,8 +266,8 @@ function resetQuery() {
   proxy.resetForm("queryRef")
   handleQuery()
 }
-
 /** 多选框选中数据 */
+
 function handleSelectionChange(selection) {
   ids.value = selection.map(item => item.id)
   single.value = selection.length != 1
@@ -304,5 +331,6 @@ function handleExport() {
   }, `course_${new Date().getTime()}.xlsx`)
 }
 
+// 页面加载时执行-查询课程管理列表
 getList()
 </script>

@@ -41,8 +41,11 @@ public class CourseController extends BaseController
     @GetMapping("/list")
     public TableDataInfo list(Course course)
     {
+        //1.开启分页
         startPage();
+        //2.查询数据
         List<Course> list = courseService.selectCourseList(course);
+        //3.返回表格分页数据对象
         return getDataTable(list);
     }
 
