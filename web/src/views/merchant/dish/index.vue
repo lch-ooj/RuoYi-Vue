@@ -69,9 +69,12 @@
 
     <el-table v-loading="loading" :data="dishList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
-      <el-table-column label="主键" align="center" prop="id" />
       <el-table-column label="菜品名称" align="center" prop="name" />
-      <el-table-column label="售价" align="center" prop="price" />
+      <el-table-column label="售价" align="center" prop="price">
+        <template #default="scope">
+          <span>¥{{ scope.row.price }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="图片" align="center" prop="image" width="100">
         <template #default="scope">
           <image-preview :src="scope.row.image" :width="50" :height="50"/>
@@ -84,7 +87,7 @@
       </el-table-column>
       <el-table-column label="更新时间" align="center" prop="updateTime" width="180">
         <template #default="scope">
-          <span>{{ parseTime(scope.row.updateTime, '{y}-{m}-{d}') }}</span>
+          <span>{{ parseTime(scope.row.updateTime, '{y}-{m}-{d} {h}:{i}:{s}') }}</span>
         </template>
       </el-table-column>
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
@@ -104,7 +107,7 @@
     />
 
     <!-- 添加或修改菜品管理对话框 -->
-    <el-dialog :title="title" v-model="open" width="500px" append-to-body>
+    <el-dialog :title="title" v-model="open" width="650px" append-to-body>
       <el-form ref="dishRef" :model="form" :rules="rules" label-width="100px">
         <el-row>
           <el-col :span="24">
@@ -150,7 +153,7 @@
           </el-col>
         </el-row>
         <el-table :data="dishFlavorList" @selection-change="handleDishFlavorSelectionChange" ref="dishFlavor">
-          <el-table-column type="selection" width="50" align="center" />
+          <el-table-column type="selection" width="50" align="center" :selectable="() => true" />
           <el-table-column label="序号" width="60">
             <template #default="{ $index }">
               {{ $index + 1 }}
@@ -158,12 +161,45 @@
           </el-table-column>
           <el-table-column label="口味名称" prop="name" width="150">
             <template #default="scope">
-              <el-input v-model="scope.row.name" placeholder="请输入口味名称" />
+              <el-select v-model="scope.row.name" placeholder="请选择口味名称" @change="handleFlavorNameChange(scope.row)">
+                <el-option
+                  v-for="item in flavorOptions"
+                  :key="item.name"
+                  :label="item.name"
+                  :value="item.name"
+                />
+              </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="口味列表" prop="value" width="150">
+          <el-table-column label="口味列表" prop="value" width="360">
             <template #default="scope">
-              <el-input v-model="scope.row.value" placeholder="请输入口味列表" />
+              <div class="flavor-value-container">
+                <div class="flavor-tags" v-if="scope.row.value && scope.row.value.length > 0">
+                  <el-tag
+                    v-for="(tag, idx) in scope.row.value"
+                    :key="idx"
+                    closable
+                    @close="handleRemoveFlavorTag(scope.row, idx)"
+                    style="margin-right: 5px; margin-bottom: 4px;"
+                  >
+                    {{ tag }}
+                  </el-tag>
+                </div>
+                <el-select
+                  v-model="scope.row.selectedFlavor"
+                  placeholder="请选择口味"
+                  @change="handleFlavorValueChange(scope.row)"
+                  v-if="scope.row.name"
+                  style="width: 100%; margin-top: 4px;"
+                >
+                  <el-option
+                    v-for="item in getAvailableFlavorValues(scope.row)"
+                    :key="item"
+                    :label="item"
+                    :value="item"
+                  />
+                </el-select>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -177,6 +213,17 @@
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.flavor-value-container {
+  width: 100%;
+}
+.flavor-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+</style>
 
 <script setup name="Dish">
 import { listDish, getDish, delDish, addDish, updateDish } from "@/api/merchant/dish"
@@ -194,6 +241,13 @@ const checkedDishFlavor = ref([])
 const single = ref(true)
 const multiple = ref(true)
 const total = ref(0)
+
+// 口味数据定义
+const flavorOptions = [
+  { name: '忌口', values: ['不要葱', '不要蒜', '不要香菜', '不要辣'] },
+  { name: '辣度', values: ['不辣', '微辣', '中辣', '重辣'] },
+  { name: '甜味', values: ['无糖', '少糖', '半糖', '全糖'] }
+]
 const title = ref("")
 
 const data = reactive({
@@ -286,7 +340,21 @@ function handleUpdate(row) {
   const _id = row.id || ids.value
   getDish(_id).then(response => {
     form.value = response.data
-    dishFlavorList.value = response.data.dishFlavorList
+    dishFlavorList.value = response.data.dishFlavorList.map(item => {
+      // 确保 value 是数组格式
+      let valueArr = item.value
+      if (typeof valueArr === 'string') {
+        try {
+          valueArr = JSON.parse(valueArr)
+        } catch (e) {
+          valueArr = []
+        }
+      }
+      if (!Array.isArray(valueArr)) {
+        valueArr = []
+      }
+      return { ...item, value: valueArr, selectedFlavor: undefined }
+    })
     open.value = true
     title.value = "修改菜品管理"
   })
@@ -296,7 +364,11 @@ function handleUpdate(row) {
 function submitForm() {
   proxy.$refs["dishRef"].validate(valid => {
     if (valid) {
-      form.value.dishFlavorList = dishFlavorList.value
+      // 提交时将 value 数组转为 JSON 字符串，并移除 selectedFlavor 辅助字段
+      form.value.dishFlavorList = dishFlavorList.value.map(item => {
+        const { selectedFlavor, ...rest } = item
+        return { ...rest, value: JSON.stringify(item.value) }
+      })
       if (form.value.id != null) {
         updateDish(form.value).then(() => {
           proxy.$modal.msgSuccess("修改成功")
@@ -329,8 +401,35 @@ function handleDelete(row) {
 function handleAddDishFlavor() {
   let obj = {}
   obj.name = undefined
-  obj.value = undefined
+  obj.value = []
+  obj.selectedFlavor = undefined
   dishFlavorList.value.push(obj)
+}
+
+/** 口味名称变更时清空口味列表 */
+function handleFlavorNameChange(row) {
+  row.value = []
+  row.selectedFlavor = undefined
+}
+
+/** 获取可选的口味值（排除已选的） */
+function getAvailableFlavorValues(row) {
+  const option = flavorOptions.find(item => item.name === row.name)
+  if (!option) return []
+  return option.values.filter(v => !row.value.includes(v))
+}
+
+/** 选择口味值后添加到列表 */
+function handleFlavorValueChange(row) {
+  if (row.selectedFlavor && !row.value.includes(row.selectedFlavor)) {
+    row.value.push(row.selectedFlavor)
+  }
+  row.selectedFlavor = undefined
+}
+
+/** 删除口味标签 */
+function handleRemoveFlavorTag(row, idx) {
+  row.value.splice(idx, 1)
 }
 
 /** 菜品口味关系删除按钮操作 */
@@ -338,17 +437,16 @@ function handleDeleteDishFlavor() {
   if (checkedDishFlavor.value.length == 0) {
     proxy.$modal.msgError("请先选择要删除的菜品口味关系数据")
   } else {
-    const dishFlavors = dishFlavorList.value
-    const checkedDishFlavors = checkedDishFlavor.value
-    dishFlavorList.value = dishFlavors.filter(function(item) {
-      return checkedDishFlavors.indexOf(item.index) == -1
+    dishFlavorList.value = dishFlavorList.value.filter((item, idx) => {
+      return checkedDishFlavor.value.indexOf(idx) == -1
     })
+    checkedDishFlavor.value = []
   }
 }
 
 /** 复选框选中数据 */
 function handleDishFlavorSelectionChange(selection) {
-  checkedDishFlavor.value = selection.map(item => item.index)
+  checkedDishFlavor.value = selection.map(item => dishFlavorList.value.indexOf(item))
 }
 
 /** 导出按钮操作 */
